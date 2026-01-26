@@ -39,14 +39,18 @@ with st.sidebar:
     st.header("Saved Queries")
     saved = st.session_state["saved_queries"]
     if saved:
-        labels = [f"{item['question']}  ({item['sql'][:60]}...)" for item in saved]
-        selected = st.selectbox("Select a saved query", labels, index=0)
+        options = list(range(len(saved)))
+        selected_idx = st.selectbox(
+            "Select a saved query",
+            options,
+            index=0,
+            format_func=lambda idx: f"{saved[idx]['question']}  ({saved[idx]['sql'][:60]}...)",
+        )
         if st.button("Load selected"):
-            idx = labels.index(selected)
-            st.session_state["last_question"] = saved[idx]["question"]
-            st.session_state["generated_sql"] = saved[idx]["sql"]
-            st.session_state["schema_context"] = saved[idx].get("schema_context", "")
-            st.session_state["sql_explanation"] = saved[idx].get("explanation", "")
+            st.session_state["last_question"] = saved[selected_idx]["question"]
+            st.session_state["generated_sql"] = saved[selected_idx]["sql"]
+            st.session_state["schema_context"] = saved[selected_idx].get("schema_context", "")
+            st.session_state["sql_explanation"] = saved[selected_idx].get("explanation", "")
             st.rerun()
     else:
         st.caption("No saved queries yet.")
