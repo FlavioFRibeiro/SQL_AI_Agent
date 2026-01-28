@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
 from sql_ai_agent.config import load_settings  # noqa: E402
 from sql_ai_agent.pipeline import qa_pipeline  # noqa: E402
 from sql_ai_agent.storage.saved_queries import (  # noqa: E402
+    delete_query,
     get_query,
     init_db,
     list_queries,
@@ -60,6 +61,15 @@ def load_selected_query(query_id: int) -> None:
     st.session_state["save_tag"] = selected.tag or ""
     st.session_state["save_notes"] = selected.notes or ""
 
+
+def delete_selected_query() -> None:
+    query_id = st.session_state.get("selected_query_id")
+    if query_id is None:
+        return
+    deleted = delete_query(settings.saved_queries_db, int(query_id))
+    st.session_state["delete_status"] = "deleted" if deleted else "not_found"
+    st.rerun()
+
 st.title("SQL AI Agent")
 st.write("Ask a question about the books dataset (for example: 'What is the average price?').")
 
@@ -87,6 +97,8 @@ if "show_sql" not in st.session_state:
     st.session_state["show_sql"] = False
 if "show_explanation" not in st.session_state:
     st.session_state["show_explanation"] = False
+if "delete_status" not in st.session_state:
+    st.session_state["delete_status"] = ""
 if "result_df" not in st.session_state:
     st.session_state["result_df"] = None
 if "has_results" not in st.session_state:
@@ -117,12 +129,23 @@ with st.sidebar:
                 "Select a saved query",
                 options,
                 index=0,
+                key="selected_query_id",
                 format_func=lambda query_id: next(
                     (f"{item.name}  ({item.created_at[:10]})" for item in saved if item.id == query_id),
                     str(query_id),
                 ),
             )
-            st.button("Load selected", on_click=load_selected_query, args=(selected_id,))
+            col_load, col_delete = st.columns(2)
+            with col_load:
+                st.button("Load selected", on_click=load_selected_query, args=(selected_id,))
+            with col_delete:
+                st.button("Delete selected", on_click=delete_selected_query)
+            if st.session_state["delete_status"] == "deleted":
+                st.success("Deleted.")
+                st.session_state["delete_status"] = ""
+            elif st.session_state["delete_status"] == "not_found":
+                st.warning("Query not found.")
+                st.session_state["delete_status"] = ""
             st.caption(f"{len(saved)} saved queries")
         else:
             st.caption("No saved queries yet.")
@@ -158,6 +181,7 @@ if run_clicked:
 
 if st.session_state["has_results"] and st.session_state["result_df"] is not None:
     st.dataframe(st.session_state["result_df"], use_container_width=True, hide_index=True)
+    st.divider()
 
     col_save, col_explain, col_sql = st.columns(3)
     with col_save:
@@ -220,6 +244,7 @@ if st.session_state["has_results"] and st.session_state["result_df"] is not None
                         )
                         st.success("Saved.")
                         st.session_state["show_save_details"] = False
+                        st.rerun()
                     except Exception as exc:
                         st.error(str(exc))
         with col_cancel:

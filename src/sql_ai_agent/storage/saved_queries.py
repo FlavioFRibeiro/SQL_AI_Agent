@@ -118,3 +118,13 @@ def get_query(db_path: str, query_id: int) -> SavedQuery | None:
         tag=row["tag"],
         notes=row["notes"],
     )
+
+
+def delete_query(db_path: str, query_id: int) -> bool:
+    with sqlite3.connect(db_path) as con:
+        cursor = con.execute(
+            "DELETE FROM saved_queries WHERE id = ?",
+            (query_id,),
+        )
+        con.commit()
+        return cursor.rowcount > 0
