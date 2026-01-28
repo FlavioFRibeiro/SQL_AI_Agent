@@ -9,6 +9,9 @@ SQL AI Agent is a lightweight Streamlit app that turns natural-language question
 4. **Execution**: DuckDB runs the query and Streamlit displays the results.
 5. **Explain & save**: you can request a short explanation and save queries locally in SQLite.
 
+![SQL_AI_Agent](Screenshot_app.jpg)
+
+---
 ## Requirements
 - Python 3.10+ (recommended 3.11)
 - DuckDB
