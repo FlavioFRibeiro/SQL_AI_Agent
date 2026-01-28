@@ -26,6 +26,23 @@ try:
 except Exception as exc:
     st.error(f"Failed to initialize saved queries database: {exc}")
 
+st.markdown(
+    """
+    <style>
+    .stButton > button {
+        border-radius: 6px;
+        padding: 0.35rem 0.9rem;
+    }
+    .btn-run button {
+        background-color: #dcfce7 !important;
+        border: 1px solid #86efac !important;
+        color: #0f172a !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 def load_selected_query(query_id: int) -> None:
     selected = get_query(settings.saved_queries_db, query_id)
@@ -62,12 +79,30 @@ if "save_tag" not in st.session_state:
     st.session_state["save_tag"] = ""
 if "save_notes" not in st.session_state:
     st.session_state["save_notes"] = ""
+if "show_save_details" not in st.session_state:
+    st.session_state["show_save_details"] = False
+if "last_sql" not in st.session_state:
+    st.session_state["last_sql"] = ""
+if "show_sql" not in st.session_state:
+    st.session_state["show_sql"] = False
+if "show_explanation" not in st.session_state:
+    st.session_state["show_explanation"] = False
+if "result_df" not in st.session_state:
+    st.session_state["result_df"] = None
+if "has_results" not in st.session_state:
+    st.session_state["has_results"] = False
 
 if question != st.session_state["last_question"]:
     st.session_state["generated_sql"] = ""
     st.session_state["last_question"] = question
     st.session_state["schema_context"] = ""
     st.session_state["sql_explanation"] = ""
+    st.session_state["show_save_details"] = False
+    st.session_state["last_sql"] = ""
+    st.session_state["show_sql"] = False
+    st.session_state["show_explanation"] = False
+    st.session_state["result_df"] = None
+    st.session_state["has_results"] = False
     if question.strip():
         st.session_state["save_name"] = question.strip()[:80]
 
@@ -94,7 +129,12 @@ with st.sidebar:
     except Exception as exc:
         st.error(f"Failed to load saved queries: {exc}")
 
-if st.button("Generate SQL"):
+with st.container():
+    st.markdown('<div class="btn-run">', unsafe_allow_html=True)
+    run_clicked = st.button("Run query")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+if run_clicked:
     if not question.strip():
         st.warning("Please enter a question.")
     else:
@@ -103,62 +143,85 @@ if st.button("Generate SQL"):
             st.session_state["generated_sql"] = result["sql"]
             st.session_state["schema_context"] = result.get("schema_context", "")
             st.session_state["sql_explanation"] = ""
+            st.session_state["show_save_details"] = False
+            st.session_state["show_sql"] = False
             for note in result.get("notes", []):
                 st.info(note)
-        except Exception as exc:
-            st.error(str(exc))
 
-if st.session_state["generated_sql"]:
-    st.subheader("Generated SQL")
-    st.code(st.session_state["generated_sql"], language="sql")
-
-    st.subheader("Save details")
-    st.text_input("Name", key="save_name")
-    st.text_input("Tag (optional)", key="save_tag")
-    st.text_area("Notes (optional)", key="save_notes")
-
-    col_explain, col_save = st.columns(2)
-    with col_explain:
-        if st.button("Explain SQL"):
-            try:
-                explanation = qa_pipeline.explain(
-                    st.session_state["generated_sql"],
-                    st.session_state.get("schema_context", ""),
-                )
-                st.session_state["sql_explanation"] = explanation
-            except Exception as exc:
-                st.error(str(exc))
-
-    with col_save:
-        if st.button("Save query"):
-            if not question.strip():
-                st.warning("Enter a question before saving.")
-            elif not st.session_state["generated_sql"]:
-                st.warning("Generate SQL before saving.")
-            elif not st.session_state["save_name"].strip():
-                st.warning("Please provide a name for this query.")
-            else:
-                try:
-                    save_query(
-                        settings.saved_queries_db,
-                        name=st.session_state["save_name"].strip(),
-                        question=question.strip(),
-                        sql=st.session_state["generated_sql"],
-                        tag=st.session_state["save_tag"].strip() or None,
-                        notes=st.session_state["save_notes"].strip() or None,
-                    )
-                    st.success("Saved.")
-                except Exception as exc:
-                    st.error(str(exc))
-
-    if st.session_state["sql_explanation"]:
-        st.subheader("Explanation")
-        st.write(st.session_state["sql_explanation"])
-
-    if st.button("Run query"):
-        try:
             df = qa_pipeline.execute_sql(st.session_state["generated_sql"])
             df = df.reset_index(drop=True)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.session_state["result_df"] = df
+            st.session_state["has_results"] = True
+        except Exception as exc:
+            st.session_state["has_results"] = False
+            st.error(str(exc))
+
+if st.session_state["has_results"] and st.session_state["result_df"] is not None:
+    st.dataframe(st.session_state["result_df"], use_container_width=True, hide_index=True)
+
+    col_save, col_explain, col_sql = st.columns(3)
+    with col_save:
+        if st.button("Save query"):
+            st.session_state["show_save_details"] = True
+    with col_explain:
+        st.session_state["show_explanation"] = st.toggle(
+            "Explain SQL",
+            value=st.session_state["show_explanation"],
+        )
+    with col_sql:
+        st.session_state["show_sql"] = st.toggle(
+            "See SQL query",
+            value=st.session_state["show_sql"])
+
+    with st.expander("Generated SQL", expanded=st.session_state["show_sql"]):
+        st.code(st.session_state["generated_sql"], language="sql")
+
+    if st.session_state["show_explanation"] and not st.session_state["sql_explanation"]:
+        try:
+            explanation = qa_pipeline.explain(
+                st.session_state["generated_sql"],
+                st.session_state.get("schema_context", ""),
+            )
+            st.session_state["sql_explanation"] = explanation
         except Exception as exc:
             st.error(str(exc))
+            st.session_state["show_explanation"] = False
+
+    with st.expander("Explanation", expanded=st.session_state["show_explanation"]):
+        if st.session_state["sql_explanation"]:
+            st.write(st.session_state["sql_explanation"])
+        else:
+            st.caption("Toggle 'Explain SQL' to generate a short explanation.")
+
+    if st.session_state["show_save_details"]:
+        st.subheader("Save details")
+        st.text_input("Name", key="save_name")
+        st.text_input("Tag (optional)", key="save_tag")
+        st.text_area("Notes (optional)", key="save_notes")
+
+        col_confirm, col_cancel = st.columns(2)
+        with col_confirm:
+            if st.button("Confirm save"):
+                if not question.strip():
+                    st.warning("Enter a question before saving.")
+                elif not st.session_state["generated_sql"]:
+                    st.warning("Run the query before saving.")
+                elif not st.session_state["save_name"].strip():
+                    st.warning("Please provide a name for this query.")
+                else:
+                    try:
+                        save_query(
+                            settings.saved_queries_db,
+                            name=st.session_state["save_name"].strip(),
+                            question=question.strip(),
+                            sql=st.session_state["generated_sql"],
+                            tag=st.session_state["save_tag"].strip() or None,
+                            notes=st.session_state["save_notes"].strip() or None,
+                        )
+                        st.success("Saved.")
+                        st.session_state["show_save_details"] = False
+                    except Exception as exc:
+                        st.error(str(exc))
+        with col_cancel:
+            if st.button("Cancel"):
+                st.session_state["show_save_details"] = False
