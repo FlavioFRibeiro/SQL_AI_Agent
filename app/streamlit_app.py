@@ -137,9 +137,9 @@ with st.sidebar:
             )
             col_load, col_delete = st.columns(2)
             with col_load:
-                st.button("Load selected", on_click=load_selected_query, args=(selected_id,))
+                st.button("Load Query", on_click=load_selected_query, args=(selected_id,))
             with col_delete:
-                st.button("Delete selected", on_click=delete_selected_query)
+                st.button("Delete Query", on_click=delete_selected_query)
             if st.session_state["delete_status"] == "deleted":
                 st.success("Deleted.")
                 st.session_state["delete_status"] = ""
